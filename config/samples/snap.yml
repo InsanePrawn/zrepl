@@ -1,0 +1,21 @@
+jobs:
+  - type: snap
+    name: "snap"
+    filesystems: {
+      "<": true,
+      "tmp": false
+    }
+    snapshotting:
+      type: manual
+    pruning:
+      keep_sender:
+        - type: not_replicated
+        - type: last_n
+          count: 10
+        - type: grid
+          grid: 1x1h(keep=all) | 24x1h | 14x1d
+          regex: "^zrepl_.*"
+      keep_receiver:
+        - type: grid
+          grid: 1x1h(keep=all) | 24x1h | 35x1d | 6x30d
+          regex: "^zrepl_.*"
