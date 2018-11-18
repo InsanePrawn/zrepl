@@ -134,7 +134,7 @@ func (m *modeSnap) RunPeriodic(ctx context.Context, wakeUpCommon chan <- struct{
 }
 
 
-func modeSnapFromConfig(g *config.Global, in *config.PushJob) (*modeSnap, error) {
+func modeSnapFromConfig(g *config.Global, in *config.SnapJob) (*modeSnap, error) {
     m := &modeSnap{}
     fsf, err := filters.DatasetMapFilterFromConfig(in.Filesystems)
     if err != nil {
