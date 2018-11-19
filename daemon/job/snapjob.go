@@ -3,7 +3,7 @@ package job
 import (
 	"context"
 	"github.com/pkg/errors"
-	"github.com/problame/go-streamrpc"
+//	"github.com/problame/go-streamrpc"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/zrepl/zrepl/config"
 	"github.com/zrepl/zrepl/daemon/filters"
@@ -11,62 +11,64 @@ import (
 	"github.com/zrepl/zrepl/daemon/job/wakeup"
 	"github.com/zrepl/zrepl/daemon/logging"
 	"github.com/zrepl/zrepl/daemon/pruner"
+	//"github.com/zrepl/zrepl/pruning"
 	"github.com/zrepl/zrepl/daemon/snapper"
 	"github.com/zrepl/zrepl/daemon/transport/connecter"
 	"github.com/zrepl/zrepl/endpoint"
-	"github.com/zrepl/zrepl/replication"
+//	"github.com/zrepl/zrepl/replication"
 	"github.com/zrepl/zrepl/util/envconst"
 	"github.com/zrepl/zrepl/zfs"
 	"sync"
 	"time"
 )
 
-type ActiveSide struct {
-	mode          activeMode
+type snap_ActiveSide struct {
+	mode          snap_activeMode
 	name          string
 	clientFactory *connecter.ClientFactory
 
-	prunerFactory *pruner.PrunerFactory
+	prunerFactory *pruner.SinglePrunerFactory
 
-
-	promRepStateSecs *prometheus.HistogramVec // labels: state
+	//promRepStateSecs *prometheus.HistogramVec // labels: state
 	promPruneSecs *prometheus.HistogramVec // labels: prune_side
-	promBytesReplicated *prometheus.CounterVec // labels: filesystem
+	//promBytesReplicated *prometheus.CounterVec // labels: filesystem
 
 	tasksMtx sync.Mutex
-	tasks    activeSideTasks
+	tasks    snap_activeSideTasks
 }
 
 
-//go:generate enumer -type=ActiveSideState
-type ActiveSideState int
-
-const (
-	ActiveSideReplicating ActiveSideState = 1 << iota
-	ActiveSidePruneSender
-	ActiveSidePruneReceiver
-	ActiveSideDone // also errors
-)
-
-
-type activeSideTasks struct {
+type snap_activeSideTasks struct {
 	state ActiveSideState
 
 	// valid for state ActiveSideReplicating, ActiveSidePruneSender, ActiveSidePruneReceiver, ActiveSideDone
-	replication *replication.Replication
-	replicationCancel context.CancelFunc
+	//replication *replication.Replication
+	//replicationCancel context.CancelFunc
 
 	// valid for state ActiveSidePruneSender, ActiveSidePruneReceiver, ActiveSideDone
-	prunerSender, prunerReceiver *pruner.Pruner
+	//prunerSender, prunerReceiver *pruner.Pruner
+	pruner *pruner.Pruner
 
 	// valid for state ActiveSidePruneReceiver, ActiveSideDone
-	prunerSenderCancel, prunerReceiverCancel context.CancelFunc
+	prunerCancel context.CancelFunc
 }
 
-func (a *ActiveSide) updateTasks(u func(*activeSideTasks)) activeSideTasks {
+func (a *snap_ActiveSide) Name() string { return a.name }
+
+func (a *snap_ActiveSide) GetPruner(ctx context.Context, sender *endpoint.Sender) (*pruner.Pruner) {
+    //p := &pruner.Pruner{ args: pruner.args{ctx, WithLogger(ctx, GetLogger(ctx).WithField("prune_side", "sender")), sender, sender, a.rules, envconst.Duration("ZREPL_PRUNER_RETRY_INTERVAL", 10 * time.Second), true, a.promPruneSecs.WithLabelValues("sender")}, state: pruner.State.Plan,}
+    p := a.prunerFactory.BuildSinglePruner(ctx,sender,sender)
+    /*if err != nil {
+	return nil, errors.Wrap(err, "cannot build receiver pruning rules")
+    }*/
+    return p
+}
+
+
+func (a *snap_ActiveSide) updateTasks(u func(*snap_activeSideTasks)) snap_activeSideTasks {
 	a.tasksMtx.Lock()
 	defer a.tasksMtx.Unlock()
-	var copy activeSideTasks
+	var copy snap_activeSideTasks
 	copy = a.tasks
 	if u == nil {
 		return copy
@@ -76,55 +78,20 @@ func (a *ActiveSide) updateTasks(u func(*activeSideTasks)) activeSideTasks {
 	return copy
 }
 
-type activeMode interface {
-	SenderReceiver(client *streamrpc.Client) (replication.Sender, replication.Receiver, error)
+
+type snap_activeMode interface {
 	Type() Type
 	RunPeriodic(ctx context.Context, wakeUpCommon chan<- struct{})
-}
-
-type modePush struct {
-	fsfilter         endpoint.FSFilter
-	snapper *snapper.PeriodicOrManual
-}
-
-func (m *modePush) SenderReceiver(client *streamrpc.Client) (replication.Sender, replication.Receiver, error) {
-	sender := endpoint.NewSender(m.fsfilter)
-	receiver := endpoint.NewRemote(client)
-	return sender, receiver, nil
-}
-
-func (m *modePush) Type() Type { return TypePush }
-
-func (m *modePush) RunPeriodic(ctx context.Context, wakeUpCommon chan <- struct{}) {
-	m.snapper.Run(ctx, wakeUpCommon)
+	//FSFilter() endpoint.FSFilter
+	FSFilter() zfs.DatasetFilter
 }
 
 
-func modePushFromConfig(g *config.Global, in *config.PushJob) (*modePush, error) {
-	m := &modePush{}
-	fsf, err := filters.DatasetMapFilterFromConfig(in.Filesystems)
-	if err != nil {
-		return nil, errors.Wrap(err, "cannnot build filesystem filter")
-	}
-	m.fsfilter = fsf
 
-	if m.snapper, err = snapper.FromConfig(g, fsf, in.Snapshotting); err != nil {
-		return nil, errors.Wrap(err, "cannot build snapper")
-	}
-
-	return m, nil
-}
-
-
-/*type modeSnap struct {
-    fsfilter         endpoint.FSFilter
+type modeSnap struct {
+//    fsfilter         endpoint.FSFilter
+    fsfilter         zfs.DatasetFilter
     snapper *snapper.PeriodicOrManual
-}
-
-func (m *modeSnap) SenderReceiver(client *streamrpc.Client) (replication.Sender, replication.Receiver, error) {
-    sender := endpoint.NewSender(m.fsfilter)
-    receiver := endpoint.NewRemote(client)
-    return sender, receiver, nil
 }
 
 func (m *modeSnap) Type() Type { return TypeSnap }
@@ -133,6 +100,9 @@ func (m *modeSnap) RunPeriodic(ctx context.Context, wakeUpCommon chan <- struct{
     m.snapper.Run(ctx, wakeUpCommon)
 }
 
+func (m *modeSnap) FSFilter() zfs.DatasetFilter {
+	return m.fsfilter
+}
 
 func modeSnapFromConfig(g *config.Global, in *config.SnapJob) (*modeSnap, error) {
     m := &modeSnap{}
@@ -148,64 +118,13 @@ func modeSnapFromConfig(g *config.Global, in *config.SnapJob) (*modeSnap, error)
 
     return m, nil
 }
-*/
 
-type modePull struct {
-	rootFS   *zfs.DatasetPath
-	interval time.Duration
-}
 
-func (m *modePull) SenderReceiver(client *streamrpc.Client) (replication.Sender, replication.Receiver, error) {
-	sender := endpoint.NewRemote(client)
-	receiver, err := endpoint.NewReceiver(m.rootFS)
-	return sender, receiver, err
-}
+func snap_activeSide(g *config.Global, in *config.SnapJob, mode *modeSnap) (j *snap_ActiveSide, err error) {
 
-func (*modePull) Type() Type { return TypePull }
-
-func (m *modePull) RunPeriodic(ctx context.Context, wakeUpCommon chan<- struct{}) {
-	t := time.NewTicker(m.interval)
-	defer t.Stop()
-	for {
-		select {
-		case <-t.C:
-			select {
-			case wakeUpCommon <- struct{}{}:
-			default:
-				GetLogger(ctx).
-					WithField("pull_interval", m.interval).
-					Warn("pull job took longer than pull interval")
-				wakeUpCommon <- struct{}{} // block anyways, to queue up the wakeup
-			}
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
-func modePullFromConfig(g *config.Global, in *config.PullJob) (m *modePull, err error) {
-	m = &modePull{}
-	if in.Interval <= 0 {
-		return nil, errors.New("interval must be positive")
-	}
-	m.interval = in.Interval
-
-	m.rootFS, err = zfs.NewDatasetPath(in.RootFS)
-	if err != nil {
-		return nil, errors.New("RootFS is not a valid zfs filesystem path")
-	}
-	if m.rootFS.Length() <= 0 {
-		return nil, errors.New("RootFS must not be empty") // duplicates error check of receiver
-	}
-
-	return m, nil
-}
-
-func activeSide(g *config.Global, in *config.ActiveJob, mode activeMode) (j *ActiveSide, err error) {
-
-	j = &ActiveSide{mode: mode}
+	j = &snap_ActiveSide{mode: mode}
 	j.name = in.Name
-	j.promRepStateSecs = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+/***	j.promRepStateSecs = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace:   "zrepl",
 		Subsystem:   "replication",
 		Name:        "state_time",
@@ -224,7 +143,7 @@ func activeSide(g *config.Global, in *config.ActiveJob, mode activeMode) (j *Act
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot build client")
 	}
-
+***/
 	j.promPruneSecs = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace:   "zrepl",
 		Subsystem:   "pruning",
@@ -232,45 +151,45 @@ func activeSide(g *config.Global, in *config.ActiveJob, mode activeMode) (j *Act
 		Help:        "seconds spent in pruner",
 		ConstLabels: prometheus.Labels{"zrepl_job":j.name},
 	}, []string{"prune_side"})
-	j.prunerFactory, err = pruner.NewPrunerFactory(in.Pruning, j.promPruneSecs)
+	j.prunerFactory, err = pruner.NewSinglePrunerFactory(in.Pruning, j.promPruneSecs)
+	//j.rules = pruning.RulesFromConfig(in.Keep)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "cannot build snapjob pruning rules")
 	}
-
 	return j, nil
 }
 
-func (j *ActiveSide) RegisterMetrics(registerer prometheus.Registerer) {
-	registerer.MustRegister(j.promRepStateSecs)
+func (j *snap_ActiveSide) RegisterMetrics(registerer prometheus.Registerer) {
 	registerer.MustRegister(j.promPruneSecs)
-	registerer.MustRegister(j.promBytesReplicated)
 }
 
-func (j *ActiveSide) Name() string { return j.name }
+/*func (j *ActiveSide) Name() string { return j.name }
 
 type ActiveSideStatus struct {
 	Replication *replication.Report
 	PruningSender, PruningReceiver *pruner.Report
 }
+*/
 
-func (j *ActiveSide) Status() *Status {
+func (j *snap_ActiveSide) Status() *Status {
 	tasks := j.updateTasks(nil)
 
 	s := &ActiveSideStatus{}
 	t := j.mode.Type()
-	if tasks.replication != nil {
+	/*if tasks.replication != nil {
 		s.Replication = tasks.replication.Report()
 	}
-	if tasks.prunerSender != nil {
-		s.PruningSender = tasks.prunerSender.Report()
+	if tasks.prunerSender != nil {*/
+	if tasks.pruner != nil {
+		s.PruningSender = tasks.pruner.Report()
 	}
-	if tasks.prunerReceiver != nil {
+	/*if tasks.prunerReceiver != nil {
 		s.PruningReceiver = tasks.prunerReceiver.Report()
-	}
+	}*/
 	return &Status{Type: t, JobSpecific: s}
 }
 
-func (j *ActiveSide) Run(ctx context.Context) {
+func (j *snap_ActiveSide) Run(ctx context.Context) {
 	log := GetLogger(ctx)
 	ctx = logging.WithSubsystemLoggers(ctx, log)
 
@@ -299,7 +218,7 @@ outer:
 	}
 }
 
-func (j *ActiveSide) do(ctx context.Context) {
+func (j *snap_ActiveSide) do(ctx context.Context) {
 
 	log := GetLogger(ctx)
 	ctx = logging.WithSubsystemLoggers(ctx, log)
@@ -342,7 +261,7 @@ func (j *ActiveSide) do(ctx context.Context) {
 			case <-t.C: // fall
 			}
 
-			j.updateTasks(func(tasks *activeSideTasks) {
+			j.updateTasks(func(tasks *snap_activeSideTasks) {
 				// Since cancelling a task will cause the sequential code to transition to the next state immediately,
 				// we cannot check for its progress right then (no fallthrough).
 				// Instead, we return (not continue because we are in a closure) and give the new state another
@@ -353,30 +272,30 @@ func (j *ActiveSide) do(ctx context.Context) {
 				const WATCHDOG_ENVCONST_NOTICE = " (adjust ZREPL_JOB_WATCHDOG_TIMEOUT env variable if inappropriate)"
 
 				switch tasks.state {
-				case ActiveSideReplicating:
+				/*case ActiveSideReplicating:
 					log.WithField("replication_progress", tasks.replication.Progress.String()).
 						Debug("check replication progress")
 					if tasks.replication.Progress.CheckTimeout(wdto, jitter) {
 						log.Error("replication did not make progress, cancelling" + WATCHDOG_ENVCONST_NOTICE)
 						tasks.replicationCancel()
 						return
-					}
+					}*/
 				case ActiveSidePruneSender:
-					log.WithField("prune_sender_progress", tasks.replication.Progress.String()).
+					log.WithField("prune_sender_progress", "TEST DEBUG 123").
 						Debug("check pruner_sender progress")
-					if tasks.prunerSender.Progress.CheckTimeout(wdto, jitter) {
+					if tasks.pruner.Progress.CheckTimeout(wdto, jitter) {
 						log.Error("pruner_sender did not make progress, cancelling" + WATCHDOG_ENVCONST_NOTICE)
-						tasks.prunerSenderCancel()
+						tasks.prunerCancel()
 						return
 					}
-				case ActiveSidePruneReceiver:
+				/*case ActiveSidePruneReceiver:
 					log.WithField("prune_receiver_progress", tasks.replication.Progress.String()).
 						Debug("check pruner_receiver progress")
 					if tasks.prunerReceiver.Progress.CheckTimeout(wdto, jitter) {
 						log.Error("pruner_receiver did not make progress, cancelling" + WATCHDOG_ENVCONST_NOTICE)
 						tasks.prunerReceiverCancel()
 						return
-					}
+					}*/
 				case ActiveSideDone:
 					// ignore, ctx will be Done() in a few milliseconds and the watchdog will exit
 				default:
@@ -388,14 +307,13 @@ func (j *ActiveSide) do(ctx context.Context) {
 		}
 	}()
 
-	client, err := j.clientFactory.NewClient()
+/*	client, err := j.clientFactory.NewClient()
 	if err != nil {
 		log.WithError(err).Error("factory cannot instantiate streamrpc client")
 	}
 	defer client.Close(ctx)
 
 	sender, receiver, err := j.mode.SenderReceiver(client)
-
 	{
 		select {
 		case <-ctx.Done():
@@ -421,18 +339,21 @@ func (j *ActiveSide) do(ctx context.Context) {
 			return
 		default:
 		}
-		ctx, senderCancel := context.WithCancel(ctx)
-		tasks := j.updateTasks(func(tasks *activeSideTasks) {
-			tasks.prunerSender = j.prunerFactory.BuildSenderPruner(ctx, sender, sender)
-			tasks.prunerSenderCancel = senderCancel
+*/
+		ctx, localCancel := context.WithCancel(ctx)
+		sender := endpoint.NewSender(j.mode.FSFilter())
+		tasks := j.updateTasks(func(tasks *snap_activeSideTasks) {
+			tasks.pruner = j.GetPruner(ctx, sender)
+			tasks.prunerCancel = localCancel
 			tasks.state = ActiveSidePruneSender
 		})
+
 		log.Info("start pruning sender")
-		tasks.prunerSender.Prune()
+		tasks.pruner.Prune()
 		log.Info("finished pruning sender")
-		senderCancel()
-	}
-	{
+		localCancel()
+//	}
+/*	{
 		select {
 		case <-ctx.Done():
 			return
@@ -449,9 +370,10 @@ func (j *ActiveSide) do(ctx context.Context) {
 		log.Info("finished pruning receiver")
 		receiverCancel()
 	}
-
-	j.updateTasks(func(tasks *activeSideTasks) {
+*/
+	j.updateTasks(func(tasks *snap_activeSideTasks) {
 		tasks.state = ActiveSideDone
 	})
 
 }
+

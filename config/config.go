@@ -60,8 +60,11 @@ type PassiveJob struct {
 }
 
 type SnapJob struct {
-	ActiveJob `yaml:",inline"`
-	Snapshotting SnapshottingEnum          `yaml:"snapshotting"`
+	Type         string                `yaml:"type"`
+	Name         string                `yaml:"name"`
+	Pruning      PruningLocal	   `yaml:"pruning"`
+	Debug        JobDebugSettings      `yaml:"debug,optional"`
+	Snapshotting SnapshottingEnum      `yaml:"snapshotting"`
 	Filesystems FilesystemsFilter `yaml:"filesystems"`
 }
 

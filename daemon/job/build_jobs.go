@@ -50,7 +50,7 @@ func buildJob(c *config.Global, in config.JobEnum) (j Job, err error) {
 		if err != nil {
 			return cannotBuildJob(err, v.Name)
 		}
-		j, err = activeSide(c, &v.ActiveJob, m)
+		j, err = snap_activeSide(c, v, m)
 		if err != nil {
 			return cannotBuildJob(err, v.Name)
 		}

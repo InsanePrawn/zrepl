@@ -85,7 +85,8 @@ func (s *Status) UnmarshalJSON(in []byte) (err error) {
 		return fmt.Errorf("field '%s', not found", key)
 	}
 	switch s.Type {
-    case TypeSnap: fallthrough
+	case TypeSnap:
+		fallthrough
 	case TypePull: fallthrough
 	case TypePush:
 		var st ActiveSideStatus
