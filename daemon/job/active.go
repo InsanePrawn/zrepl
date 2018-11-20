@@ -115,41 +115,6 @@ func modePushFromConfig(g *config.Global, in *config.PushJob) (*modePush, error)
 	return m, nil
 }
 
-
-/*type modeSnap struct {
-    fsfilter         endpoint.FSFilter
-    snapper *snapper.PeriodicOrManual
-}
-
-func (m *modeSnap) SenderReceiver(client *streamrpc.Client) (replication.Sender, replication.Receiver, error) {
-    sender := endpoint.NewSender(m.fsfilter)
-    receiver := endpoint.NewRemote(client)
-    return sender, receiver, nil
-}
-
-func (m *modeSnap) Type() Type { return TypeSnap }
-
-func (m *modeSnap) RunPeriodic(ctx context.Context, wakeUpCommon chan <- struct{}) {
-    m.snapper.Run(ctx, wakeUpCommon)
-}
-
-
-func modeSnapFromConfig(g *config.Global, in *config.SnapJob) (*modeSnap, error) {
-    m := &modeSnap{}
-    fsf, err := filters.DatasetMapFilterFromConfig(in.Filesystems)
-    if err != nil {
-        return nil, errors.Wrap(err, "cannnot build filesystem filter")
-    }
-    m.fsfilter = fsf
-
-    if m.snapper, err = snapper.FromConfig(g, fsf, in.Snapshotting); err != nil {
-        return nil, errors.Wrap(err, "cannot build snapper")
-    }
-
-    return m, nil
-}
-*/
-
 type modePull struct {
 	rootFS   *zfs.DatasetPath
 	interval time.Duration
