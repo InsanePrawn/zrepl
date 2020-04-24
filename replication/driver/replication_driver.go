@@ -13,7 +13,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/zrepl/zrepl/daemon/logging"
 	"github.com/zrepl/zrepl/replication/report"
 	"github.com/zrepl/zrepl/util/chainlock"
 	"github.com/zrepl/zrepl/util/envconst"
