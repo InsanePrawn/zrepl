@@ -329,8 +329,28 @@ func (a ZFSSendArgsUnvalidated) buildCommonSendArgs() ([]string, error) {
 		return args, nil
 	}
 
-	if a.Encrypted.B {
+	if a.Encrypted.B || a.Raw {
 		args = append(args, "-w")
+	}
+
+	if a.Properties {
+		args = append(args, "-p")
+	}
+
+	if a.BackupProperties {
+		args = append(args, "-b")
+	}
+
+	if a.LargeBlocks {
+		args = append(args, "-L")
+	}
+
+	if a.Compressed {
+		args = append(args, "-c")
+	}
+
+	if a.EmbeddedData {
+		args = append(args, "-e")
 	}
 
 	toV, err := absVersion(a.FS, a.To)
@@ -571,9 +591,15 @@ func (n *NilBool) String() string {
 
 // When updating this struct, check Validate and ValidateCorrespondsToResumeToken (POTENTIALLY SECURITY SENSITIVE)
 type ZFSSendArgsUnvalidated struct {
-	FS        string
-	From, To  *ZFSSendArgVersion // From may be nil
-	Encrypted *NilBool
+	FS               string
+	From, To         *ZFSSendArgVersion // From may be nil
+	Encrypted        *NilBool
+	Properties       bool
+	BackupProperties bool
+	Raw              bool
+	LargeBlocks      bool
+	Compressed       bool
+	EmbeddedData     bool
 
 	// Preferred if not empty
 	ResumeToken string // if not nil, must match what is specified in From, To (covered by ValidateCorrespondsToResumeToken)
@@ -779,15 +805,25 @@ func ZFSSend(ctx context.Context, sendArgs ZFSSendArgsValidated) (*SendStream, e
 	args = append(args, "send")
 
 	// pre-validation of sendArgs for plain ErrEncryptedSendNotSupported error
+	// we tie BackupProperties (send -b) and SendRaw (-w, same as with Encrypted) to this
+	// since these were released together.
 	// TODO go1.13: push this down to sendArgs.Validate
-	if encryptedSendValid := sendArgs.Encrypted.Validate(); encryptedSendValid == nil && sendArgs.Encrypted.B {
-		supported, err := EncryptionCLISupported(ctx)
+
+	if sendArgs.Encrypted.B || sendArgs.Raw || sendArgs.BackupProperties {
+		encryptionSupported, err := EncryptionCLISupported(ctx)
 		if err != nil {
 			return nil, errors.Wrap(err, "cannot determine CLI native encryption support")
 		}
-		if !supported {
+
+		if !encryptionSupported {
 			return nil, ErrEncryptedSendNotSupported
 		}
+	}
+
+	// TODO: Add similar tests for -L, -c and -e if applicable.
+
+	if _, err := sendArgs.Validate(ctx); err != nil {
+		return nil, err // do not wrap, part of API, tested by platformtest
 	}
 
 	sargs, err := sendArgs.buildCommonSendArgs()
@@ -974,6 +1010,35 @@ type RecvOptions struct {
 	RollbackAndForceRecv bool
 	// Set -s flag used for resumable send & recv
 	SavePartialRecvState bool
+	InheritProperties    []Property
+	OverrideProperties   map[Property]string
+}
+
+type Property string
+
+// Check property name conforms to zfsprops(8), section "User Properties"
+// Keep regex and error message in sync!
+var (
+	propertyValidNameChars    = regexp.MustCompile(`^[0-9a-zA-Z-_\.:]+$`)
+	propertyValidNameCharsErr = fmt.Errorf("property name must only contain alphanumeric chars and any in %q", "-_.:")
+)
+
+func (p Property) Validate() error {
+	const PROPERTYNAMEMAXLEN int = 256
+
+	if len(p) < 1 {
+		return fmt.Errorf("property name cannot be empty")
+	}
+	if len(p) > PROPERTYNAMEMAXLEN {
+		return fmt.Errorf("property name longer than %d characters", PROPERTYNAMEMAXLEN)
+	}
+	if p[0] == '-' {
+		return fmt.Errorf("property name cannot start with '-'")
+	}
+	if !propertyValidNameChars.MatchString(string(p)) {
+		return propertyValidNameCharsErr
+	}
+	return nil
 }
 
 type ErrRecvResumeNotSupported struct {
@@ -1051,6 +1116,17 @@ func ZFSRecv(ctx context.Context, fs string, v *ZFSSendArgVersion, stream io.Rea
 		}
 		args = append(args, "-s")
 	}
+	if opts.InheritProperties != nil {
+		for _, prop := range opts.InheritProperties {
+			args = append(args, "-x", string(prop))
+		}
+	}
+	if opts.OverrideProperties != nil {
+		for prop, value := range opts.OverrideProperties {
+			args = append(args, "-o", fmt.Sprintf("%s=%s", prop, value))
+		}
+	}
+
 	args = append(args, v.FullPath(fs))
 
 	ctx, cancelCmd := context.WithCancel(ctx)

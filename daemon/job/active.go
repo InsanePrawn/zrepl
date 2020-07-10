@@ -152,10 +152,16 @@ func modePushFromConfig(g *config.Global, in *config.PushJob, jobID endpoint.Job
 	}
 
 	m.senderConfig = &endpoint.SenderConfig{
-		FSF:                         fsf,
-		Encrypt:                     &zfs.NilBool{B: in.Send.Encrypted},
+		FSF:                  fsf,
+		Encrypt:              &zfs.NilBool{B: in.Send.Encrypted},
+		SendRaw:              in.Send.Raw,
+		SendProperties:       in.Send.SendProperties,
+		SendBackupProperties: in.Send.BackupProperties,
+		SendLargeBlocks:      in.Send.LargeBlocks,
+		SendCompressed:       in.Send.Compressed,
+		SendEmbeddedData:     in.Send.EmbeddedData,
 		DisableIncrementalStepHolds: in.Send.StepHolds.DisableIncremental,
-		JobID:                       jobID,
+		JobID:                jobID,
 	}
 	m.plannerPolicy = &logic.PlannerPolicy{
 		EncryptedSend: logic.TriFromBool(in.Send.Encrypted),
@@ -263,6 +269,8 @@ func modePullFromConfig(g *config.Global, in *config.PullJob, jobID endpoint.Job
 		JobID:                      jobID,
 		RootWithoutClientComponent: m.rootFS,
 		AppendClientIdentity:       false, // !
+		InheritProperties:          in.Recv.Properties.Inherit,
+		OverrideProperties:         in.Recv.Properties.Override,
 		UpdateLastReceivedHold:     true,
 	}
 	if err := m.receiverConfig.Validate(); err != nil {

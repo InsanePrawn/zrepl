@@ -12,6 +12,8 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/zrepl/yaml-config"
+
+	"github.com/zrepl/zrepl/zfs"
 )
 
 type Config struct {
@@ -76,7 +78,13 @@ type SnapJob struct {
 }
 
 type SendOptions struct {
-	Encrypted bool                 `yaml:"encrypted"`
+	Encrypted        bool `yaml:"encrypted,optional"`
+	Raw              bool `yaml:"raw,optional"`
+	SendProperties   bool `yaml:"send_properties,optional"`
+	BackupProperties bool `yaml:"backup_properties,optional"`
+	LargeBlocks      bool `yaml:"large_blocks,optional"`
+	Compressed       bool `yaml:"compressed,optional"`
+	EmbeddedData     bool `yaml:"embbeded_data,optional"`
 	StepHolds SendOptionsStepHolds `yaml:"step_holds,optional"`
 }
 
@@ -87,21 +95,43 @@ type SendOptionsStepHolds struct {
 var _ yaml.Defaulter = (*SendOptions)(nil)
 
 func (l *SendOptions) SetDefault() {
-	*l = SendOptions{Encrypted: false}
+	*l = SendOptions{
+		Encrypted:        false,
+		Raw:              false,
+		SendProperties:   false,
+		BackupProperties: false,
+		LargeBlocks:      false,
+		Compressed:       false,
+		EmbeddedData:     false,
+	}
 }
 
 type RecvOptions struct {
 	// Note: we cannot enforce encrypted recv as the ZFS cli doesn't provide a mechanism for it
 	// Encrypted bool `yaml:"may_encrypted"`
-
 	// Future:
 	// Reencrypt bool `yaml:"reencrypt"`
+
+	Properties *PropertyRecvOptions `yaml:"properties,fromdefaults"`
 }
 
 var _ yaml.Defaulter = (*RecvOptions)(nil)
 
 func (l *RecvOptions) SetDefault() {
-	*l = RecvOptions{}
+	*l = RecvOptions{Properties: &PropertyRecvOptions{}}
+}
+
+type PropertyRecvOptions struct {
+	Inherit  []zfs.Property          `yaml:"inherit,optional"`
+	Override map[zfs.Property]string `yaml:"override,optional"`
+}
+
+var _ yaml.Defaulter = (*PropertyRecvOptions)(nil)
+
+func (l *PropertyRecvOptions) SetDefault() {
+	//*l = PropertyRecvOptions{}
+	//TODO: is below necessary?
+	*l = PropertyRecvOptions{Inherit: make([]zfs.Property, 0), Override: make(map[zfs.Property]string)}
 }
 
 type PushJob struct {
