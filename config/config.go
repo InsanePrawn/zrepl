@@ -13,7 +13,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/zrepl/yaml-config"
 
-	"github.com/zrepl/zrepl/zfs"
+	zfsprop "github.com/zrepl/zrepl/zfs/property"
 )
 
 type Config struct {
@@ -122,8 +122,8 @@ func (l *RecvOptions) SetDefault() {
 }
 
 type PropertyRecvOptions struct {
-	Inherit  []zfs.Property          `yaml:"inherit,optional"`
-	Override map[zfs.Property]string `yaml:"override,optional"`
+	Inherit  []zfsprop.Property          `yaml:"inherit,optional"`
+	Override map[zfsprop.Property]string `yaml:"override,optional"`
 }
 
 var _ yaml.Defaulter = (*PropertyRecvOptions)(nil)
@@ -131,7 +131,7 @@ var _ yaml.Defaulter = (*PropertyRecvOptions)(nil)
 func (l *PropertyRecvOptions) SetDefault() {
 	//*l = PropertyRecvOptions{}
 	//TODO: is below necessary?
-	*l = PropertyRecvOptions{Inherit: make([]zfs.Property, 0), Override: make(map[zfs.Property]string)}
+	*l = PropertyRecvOptions{Inherit: make([]zfsprop.Property, 0), Override: make(map[zfsprop.Property]string)}
 }
 
 type PushJob struct {

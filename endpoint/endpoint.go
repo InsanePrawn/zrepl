@@ -18,6 +18,7 @@ import (
 	"github.com/zrepl/zrepl/util/envconst"
 	"github.com/zrepl/zrepl/util/semaphore"
 	"github.com/zrepl/zrepl/zfs"
+	zfsprop "github.com/zrepl/zrepl/zfs/property"
 )
 
 type SenderConfig struct {
@@ -473,19 +474,19 @@ type ReceiverConfig struct {
 
 	RootWithoutClientComponent *zfs.DatasetPath // TODO use
 	AppendClientIdentity       bool
-	InheritProperties          []zfs.Property
-	OverrideProperties         map[zfs.Property]string
+	InheritProperties          []zfsprop.Property
+	OverrideProperties         map[zfsprop.Property]string
 	UpdateLastReceivedHold     bool
 }
 
 func (c *ReceiverConfig) copyIn() {
 	c.RootWithoutClientComponent = c.RootWithoutClientComponent.Copy()
 
-	pInherit := make([]zfs.Property, len(c.InheritProperties))
+	pInherit := make([]zfsprop.Property, len(c.InheritProperties))
 	copy(pInherit, c.InheritProperties)
 	c.InheritProperties = pInherit
 
-	pOverride := make(map[zfs.Property]string, len(c.OverrideProperties))
+	pOverride := make(map[zfsprop.Property]string, len(c.OverrideProperties))
 	for key, value := range c.OverrideProperties {
 		pOverride[key] = value
 	}
