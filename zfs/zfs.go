@@ -325,45 +325,6 @@ func absVersion(fs string, v *ZFSSendArgVersion) (full string, err error) {
 	return fmt.Sprintf("%s%s", fs, v.RelName), nil
 }
 
-// tok is allowed to be nil
-// a must already be validated
-//
-// SECURITY SENSITIVE because Raw must be handled correctly
-func (a ZFSSendArgsUnvalidated) buildCommonSendArgs() ([]string, error) {
-
-	args := make([]string, 0, 3)
-	// ResumeToken takes precedence, we assume that it has been validated to reflect
-	// what is described by the other fields in ZFSSendArgs
-	if a.ResumeToken != "" {
-		args = append(args, "-t", a.ResumeToken)
-		return args, nil
-	}
-
-	if a.Encrypted.B {
-		args = append(args, "-w")
-	}
-
-	toV, err := absVersion(a.FS, a.To)
-	if err != nil {
-		return nil, err
-	}
-
-	fromV := ""
-	if a.From != nil {
-		fromV, err = absVersion(a.FS, a.From)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if fromV == "" { // Initial
-		args = append(args, toV)
-	} else {
-		args = append(args, "-i", fromV, toV)
-	}
-	return args, nil
-}
-
 func pipeWithCapacityHint(capacity int) (r, w *os.File, err error) {
 	if capacity <= 0 {
 		panic(fmt.Sprintf("capacity must be positive %v", capacity))
@@ -683,6 +644,45 @@ func (a ZFSSendArgsUnvalidated) Validate(ctx context.Context) (v ZFSSendArgsVali
 	}, nil
 }
 
+// ResumeToken is allowed to be empty
+// a must already be validated
+//
+// SECURITY SENSITIVE because Encrypted must be handled correctly
+func (a ZFSSendArgsValidated) buildSendArgs() ([]string, error) {
+	args := make([]string, 0, 3)
+
+	// ResumeToken takes precedence, we assume that it has been validated
+	// to reflect what is described by the other fields
+	if a.ResumeToken != "" {
+		args = append(args, "-t", a.ResumeToken)
+		return args, nil
+	}
+
+	if a.Encrypted.B {
+		args = append(args, "-w")
+	}
+
+	toV, err := absVersion(a.FS, a.To)
+	if err != nil {
+		return nil, err
+	}
+
+	fromV := ""
+	if a.From != nil {
+		fromV, err = absVersion(a.FS, a.From)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if fromV == "" { // Initial
+		args = append(args, toV)
+	} else {
+		args = append(args, "-i", fromV, toV)
+	}
+	return args, nil
+}
+
 type ZFSSendArgsResumeTokenMismatchError struct {
 	What ZFSSendArgsResumeTokenMismatchErrorCode
 	Err  error
@@ -800,7 +800,7 @@ func ZFSSend(ctx context.Context, sendArgs ZFSSendArgsValidated) (*SendStream, e
 		}
 	}
 
-	sargs, err := sendArgs.buildCommonSendArgs()
+	sargs, err := sendArgs.buildSendArgs()
 	if err != nil {
 		return nil, err
 	}
@@ -974,7 +974,7 @@ func ZFSSendDry(ctx context.Context, sendArgs ZFSSendArgsValidated) (_ *DrySendI
 
 	args := make([]string, 0)
 	args = append(args, "send", "-n", "-v", "-P")
-	sargs, err := sendArgs.buildCommonSendArgs()
+	sargs, err := sendArgs.buildSendArgs()
 	if err != nil {
 		return nil, err
 	}
