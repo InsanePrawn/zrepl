@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gdamore/tcell"
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 
 	"github.com/zrepl/zrepl/client/status.v2/viewmodel"
@@ -95,10 +95,8 @@ func interactive(c Client, flag statusFlags) error {
 			}
 			app.SetRoot(toolbarSplit, true)
 			app.SetFocus(preModalFocus)
-			app.Draw()
 		})
 		app.SetRoot(m, true)
-		app.Draw()
 	}
 
 	app.SetRoot(toolbarSplit, true)
@@ -192,9 +190,6 @@ func interactive(c Client, flag statusFlags) error {
 		bottombar.ResizeItem(bottombarDateView, len(bottombardatestring), 0)
 
 		bottomBarStatus.SetText(m.BottomBarStatus())
-
-		app.Draw()
-
 	}
 
 	go func() {
