@@ -17,6 +17,9 @@ func interactive(c Client, flag statusFlags) error {
 
 	// TODO look into https://gitlab.com/tslocum/cview/blob/master/FORK.md
 
+	// Set this so we don't overwrite the default terminal background color
+	tview.Styles.PrimitiveBackgroundColor = tcell.ColorDefault
+	tview.Styles.PrimaryTextColor = tcell.ColorDefault
 	app := tview.NewApplication()
 
 	jobDetailSplit := tview.NewFlex()
