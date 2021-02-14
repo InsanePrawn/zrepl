@@ -114,7 +114,7 @@ func interactive(c Client, flag statusFlags) error {
 		FSFilter:                func(_ string) bool { return true },
 		DetailViewWidth:         100,
 		DetailViewWrap:          false,
-		ShortKeybindingOverview: "[::b]<TAB>[::-] switch panes  [::b]Shift+M[::-] toggle navbar  [::b]Shift+S[::-] signal job [::b]</>[::-] filter filesystems",
+		ShortKeybindingOverview: "[::b]Q[::-] quit  [::b]<TAB>[::-] switch panes  [::b]Shift+M[::-] toggle navbar  [::b]Shift+S[::-] signal job [::b]</>[::-] filter filesystems",
 	}
 	paramsMtx := &sync.Mutex{}
 	var redraw func()
@@ -255,6 +255,10 @@ func interactive(c Client, flag statusFlags) error {
 		if e.Key() == tcell.KeyRune && e.Rune() == 'M' {
 			reconfigureJobDetailSplit(!jobMenuVisisble)
 			return nil
+		}
+
+		if e.Key() == tcell.KeyRune && e.Rune() == 'q' {
+			app.Stop()
 		}
 
 		if e.Key() == tcell.KeyRune && e.Rune() == 'S' {
