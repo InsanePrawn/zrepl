@@ -313,6 +313,7 @@ func interactive(c Client, flag statusFlags) error {
 			viewmodelupdate(func(p *viewmodel.Params) {
 				p.DetailViewWrap = !p.DetailViewWrap
 			})
+			redraw()
 			return nil
 		}
 		return event
