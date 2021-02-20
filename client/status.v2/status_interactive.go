@@ -7,15 +7,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gdamore/tcell"
-	"github.com/rivo/tview"
+	"github.com/gdamore/tcell/v2"
+	tview "gitlab.com/tslocum/cview"
 
 	"github.com/zrepl/zrepl/client/status.v2/viewmodel"
 )
 
 func interactive(c Client, flag statusFlags) error {
-
-	// TODO look into https://gitlab.com/tslocum/cview/blob/master/FORK.md
 
 	// Set this so we don't overwrite the default terminal background color
 	tview.Styles.PrimitiveBackgroundColor = tcell.ColorDefault
@@ -27,25 +25,36 @@ func interactive(c Client, flag statusFlags) error {
 	jobMenu := tview.NewTreeView()
 	jobMenuRoot := tview.NewTreeNode("jobs")
 	jobMenuRoot.SetSelectable(true)
-	jobMenu.SetRoot(jobMenuRoot).SetCurrentNode(jobMenuRoot)
-	jobTextDetail := tview.NewTextView().SetWrap(false)
+	jobMenu.SetRoot(jobMenuRoot)
+	jobMenu.SetCurrentNode(jobMenuRoot)
+	jobMenu.SetSelectedTextColor(tcell.ColorGreen)
+	jobTextDetail := tview.NewTextView()
+	jobTextDetail.SetWrap(false)
 
 	jobMenu.SetBorder(true)
 	jobTextDetail.SetBorder(true)
 
-	toolbarSplit := tview.NewFlex().SetDirection(tview.FlexRow)
+	toolbarSplit := tview.NewFlex()
+	toolbarSplit.SetDirection(tview.FlexRow)
 	inputBarContainer := tview.NewFlex()
 	fsFilterInput := tview.NewInputField()
 	fsFilterInput.SetBorder(false)
-	inputBarContainer.AddItem(tview.NewTextView().SetText("[::b]FILTER ").SetDynamicColors(true), 7, 1, false)
+	fsFilterInput.SetFieldBackgroundColor(tcell.ColorDefault)
+	inputBarLabel := tview.NewTextView()
+	inputBarLabel.SetText("[::b]FILTER ")
+	inputBarLabel.SetDynamicColors(true)
+	inputBarContainer.AddItem(inputBarLabel, 7, 1, false)
 	inputBarContainer.AddItem(fsFilterInput, 0, 10, false)
 	toolbarSplit.AddItem(inputBarContainer, 1, 0, false)
 	toolbarSplit.AddItem(jobDetailSplit, 0, 10, false)
 
-	bottombar := tview.NewFlex().SetDirection(tview.FlexColumn)
+	bottombar := tview.NewFlex()
+	bottombar.SetDirection(tview.FlexColumn)
 	bottombarDateView := tview.NewTextView()
 	bottombar.AddItem(bottombarDateView, len(time.Now().String()), 0, false)
-	bottomBarStatus := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignRight)
+	bottomBarStatus := tview.NewTextView()
+	bottomBarStatus.SetDynamicColors(true)
+	bottomBarStatus.SetTextAlign(tview.AlignRight)
 	bottombar.AddItem(bottomBarStatus, 0, 10, false)
 	toolbarSplit.AddItem(bottombar, 1, 0, false)
 
@@ -162,9 +171,9 @@ func interactive(c Client, flag statusFlags) error {
 			selectedJobN = nil
 			children := make([]*tview.TreeNode, len(jobs))
 			for i := range jobs {
-				jobN := tview.NewTreeNode(jobs[i].JobTreeTitle()).
-					SetReference(jobs[i]).
-					SetSelectable(true)
+				jobN := tview.NewTreeNode(jobs[i].JobTreeTitle())
+				jobN.SetReference(jobs[i])
+				jobN.SetSelectable(true)
 				children[i] = jobN
 				jobN.SetSelectedFunc(func() {
 					viewmodelupdate(func(p *viewmodel.Params) {
@@ -272,7 +281,11 @@ func interactive(c Client, flag statusFlags) error {
 			}
 			signals := []string{"replication", "snapshot", "reset"}
 			clientFuncs := []func(job string) error{c.SignalReplication, c.SignalSnapshot, c.SignalReset}
-			sigMod := tview.NewModal().AddButtons(signals)
+			sigMod := tview.NewModal()
+			sigMod.SetBackgroundColor(tcell.ColorDefault)
+			sigMod.SetBorder(true)
+			sigMod.GetForm().SetButtonTextColorFocused(tcell.ColorGreen)
+			sigMod.AddButtons(signals)
 			sigMod.SetText(fmt.Sprintf("Send a signal to job %q", job.Name()))
 			showModal(sigMod, func(idx int, _ string) {
 				go func() {
@@ -282,7 +295,8 @@ func interactive(c Client, flag statusFlags) error {
 					err := clientFuncs[idx](job.Name())
 					if err != nil {
 						app.QueueUpdate(func() {
-							me := tview.NewModal().SetText(fmt.Sprintf("signal error: %s", err))
+							me := tview.NewModal()
+							me.SetText(fmt.Sprintf("signal error: %s", err))
 							me.AddButtons([]string{"Close"})
 							showModal(me, nil)
 						})
