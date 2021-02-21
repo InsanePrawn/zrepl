@@ -15,8 +15,10 @@ import (
 
 func interactive(c Client, flag statusFlags) error {
 
-	// Set this so we don't overwrite the default terminal background color
+	// Set this so we don't overwrite the default terminal colors
+	// See https://github.com/rivo/tview/blob/master/styles.go
 	tview.Styles.PrimitiveBackgroundColor = tcell.ColorDefault
+	tview.Styles.ContrastBackgroundColor = tcell.ColorDefault
 	tview.Styles.PrimaryTextColor = tcell.ColorDefault
 	tview.Styles.BorderColor = tcell.ColorDefault
 	app := tview.NewApplication()
